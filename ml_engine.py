@@ -1,17 +1,13 @@
 import numpy as np
 import cv2
-from facenet_pytorch import MTCNN
 from insightface.app import FaceAnalysis
-from PIL import Image
 import io
 
 # Initialize models globally to load them only once
 print("Loading ML models... this may take a moment.")
 
-# MTCNN for validation (CPU is safer for free tier deployments)
-mtcnn = MTCNN(keep_all=False, device='cpu')
-
-# ArcFace for embeddings
+# ArcFace for both Detection AND Embeddings
+# 'buffalo_l' includes a detector, so we don't need MTCNN
 arcface = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
 arcface.prepare(ctx_id=0, det_size=(640, 640))
 
@@ -19,25 +15,20 @@ print("Models loaded successfully.")
 
 def process_image_bytes(file_bytes):
     """
-    Converts uploaded file bytes to:
-    1. PIL Image (for MTCNN)
-    2. CV2 Image (for ArcFace)
+    Converts uploaded file bytes to CV2 Image directly.
     """
-    # Convert to PIL
-    pil_image = Image.open(io.BytesIO(file_bytes)).convert("RGB")
-    
     # Convert to CV2 (OpenCV uses BGR)
     nparr = np.frombuffer(file_bytes, np.uint8)
     cv2_image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     
-    return pil_image, cv2_image
+    return cv2_image
 
-def check_face_exists(pil_image):
+def check_face_exists(cv2_image):
     """
-    Returns True if MTCNN detects a face.
+    Returns True if ArcFace detects a face.
     """
-    face = mtcnn(pil_image)
-    return face is not None
+    faces = arcface.get(cv2_image)
+    return len(faces) > 0
 
 def get_embedding(cv2_image):
     """
