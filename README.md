@@ -2,7 +2,7 @@ FaceAuth: Face Detection & Verification System
 
 A robust, web-based Face Verification System built with FastAPI and InsightFace. This application allows users to register their faces via a live camera interface and verify their identity against a database of stored embeddings.
 
-It is designed to be mobile-friendly and easily deployable on cloud platforms like Railway.
+It is designed to be mobile-friendly and easily deployable on cloud platforms like Railway,AWS, Digital Ocean . 
 
 🚀 Features
 
