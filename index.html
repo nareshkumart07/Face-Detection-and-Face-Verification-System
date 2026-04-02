@@ -1,244 +1,517 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Face Verification - Live Camera</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Enterprise Time & Attendance</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* Mirror the video to make it feel like a real mirror */
-        video { transform: scaleX(-1); }
+        /* Mirror the video so it feels like a real mirror */
+        video.mirrored { transform: scaleX(-1); }
+
+        /* Custom sleek scrollbar for scrolling windows */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Smooth transitions for interactive elements */
+        .touch-target { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .touch-target:active { transform: scale(0.96); }
+
+        /* Mobile specific camera hiding logic */
+        @media (max-width: 1023px) {
+            .mobile-hidden { display: none !important; }
+        }
     </style>
 </head>
-<body class="bg-slate-900 text-white min-h-screen font-sans pb-10">
+<body class="bg-slate-50 text-slate-800 font-sans h-screen flex flex-col overflow-hidden selection:bg-indigo-200">
 
-    <!-- Navbar -->
-    <nav class="bg-slate-800 border-b border-slate-700 p-4 sticky top-0 z-50">
-        <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold text-blue-400"><i class="fas fa-id-badge mr-2"></i>FaceAuth</h1>
-            <div class="text-xs md:text-sm text-slate-400 font-mono" id="api-status">Connecting...</div>
-        </div>
-    </nav>
-
-    <div class="container mx-auto px-4 py-6 max-w-3xl">
-        
-        <!-- Tabs -->
-        <div class="flex mb-6 bg-slate-800 rounded-lg p-1 shadow-md">
-            <button onclick="switchTab('register')" id="tab-register" class="flex-1 py-3 rounded-md bg-blue-600 transition-all font-bold text-sm md:text-base">Register</button>
-            <button onclick="switchTab('verify')" id="tab-verify" class="flex-1 py-3 rounded-md hover:bg-slate-700 transition-all text-slate-300 font-bold text-sm md:text-base">Verify</button>
-        </div>
-
-        <!-- Camera Container (Shared) -->
-        <!-- CHANGED: h-80 for mobile (taller), aspect-video for desktop (wider) -->
-        <div class="bg-black rounded-2xl overflow-hidden shadow-2xl border-2 border-slate-700 relative mb-6 h-80 md:h-auto md:aspect-video mx-auto">
-            <video id="video" class="w-full h-full object-cover" autoplay playsinline muted></video>
-            <canvas id="canvas" class="hidden"></canvas>
-            
-            <!-- Camera Overlay UI -->
-            <div class="absolute bottom-4 left-0 right-0 flex justify-center gap-4 z-10">
-                <button onclick="startCamera()" id="btn-start-cam" class="bg-slate-700/80 backdrop-blur-sm hover:bg-slate-600 text-white px-6 py-2 rounded-full text-sm font-semibold shadow-lg border border-slate-500">
-                    <i class="fas fa-video mr-1"></i> Start Camera
-                </button>
+    <!-- Top App Header -->
+    <header class="bg-white shadow-sm px-4 md:px-6 py-3 md:py-4 flex justify-between items-center z-40 relative">
+        <div class="flex items-center gap-3">
+            <div class="bg-indigo-600 text-white p-2 rounded-lg shadow-sm">
+                <i class="fas fa-building-shield text-lg md:text-xl"></i>
             </div>
-            
-            <!-- Face Frame Guide (Visual only) -->
-            <div class="absolute inset-0 pointer-events-none flex items-center justify-center opacity-30">
-                <div class="w-48 h-64 border-2 border-white rounded-3xl border-dashed"></div>
-            </div>
-        </div>
-
-        <!-- Register Controls -->
-        <div id="section-register" class="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
-            <h2 class="text-2xl font-bold mb-4">Register User</h2>
-            <form onsubmit="handleRegister(event)" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium mb-1 text-slate-300">Full Name</label>
-                    <input type="text" id="reg-name" required placeholder="Enter person's name" class="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 focus:border-blue-500 focus:outline-none transition-colors text-lg placeholder-slate-600">
+            <div>
+                <h1 class="text-lg md:text-xl font-bold text-slate-900 tracking-tight leading-none">Enterprise<span class="font-light text-slate-500">Clock</span></h1>
+                <div class="text-[10px] md:text-xs font-semibold text-emerald-600 uppercase tracking-widest mt-1 flex items-center gap-1" id="api-status">
+                    <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> Online
                 </div>
-                
-                <button type="submit" id="btn-register" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-lg shadow-lg transition-transform active:scale-95 flex justify-center items-center gap-2">
-                    <i class="fas fa-camera"></i> Capture & Register
-                </button>
-            </form>
-            <div id="reg-result" class="mt-4 hidden p-3 rounded-lg text-center font-semibold"></div>
+            </div>
         </div>
+        
+        <!-- Live Clock -->
+        <div class="text-right">
+            <div id="clock" class="text-xl md:text-2xl font-bold text-slate-800 tracking-wider font-mono leading-none">12:00</div>
+            <div id="date" class="text-[10px] md:text-xs font-medium text-slate-400 uppercase tracking-widest mt-1">Mon, Jan 1</div>
+        </div>
+    </header>
 
-        <!-- Verify Controls -->
-        <div id="section-verify" class="hidden bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
-            <h2 class="text-2xl font-bold mb-4">Verify Identity</h2>
-            <p class="text-slate-400 mb-4">Center your face in the frame and tap verify.</p>
+    <!-- Main Content Area (Scrollable if needed) -->
+    <main class="flex-1 overflow-y-auto pb-20 lg:pb-6 p-4 md:p-6 flex flex-col items-center custom-scrollbar">
+        
+        <div class="w-full max-w-6xl flex flex-col lg:flex-row gap-6 min-h-full lg:h-full">
             
-            <button onclick="handleVerify()" id="btn-verify" class="w-full bg-green-600 hover:bg-green-500 py-4 rounded-xl font-bold text-lg shadow-lg transition-transform active:scale-95 flex justify-center items-center gap-2">
-                <i class="fas fa-fingerprint"></i> Capture & Verify
-            </button>
+            <!-- SHARED CAMERA SECTION (Left on Desktop, Top on Mobile) -->
+            <div id="shared-camera-section" class="w-full lg:w-1/2 flex flex-col gap-4">
+                
+                <div class="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col h-full">
+                    
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-sm font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                            <i class="fas fa-camera text-indigo-500"></i> Viewfinder
+                        </h2>
+                        <!-- Discrete Camera Switcher -->
+                        <div class="relative group">
+                            <i class="fas fa-cog text-slate-300 hover:text-slate-500 cursor-pointer transition-colors p-2"></i>
+                            <select id="camera-select" onchange="restartCameraWithId(this.value)" class="absolute right-0 top-0 opacity-0 w-8 h-8 cursor-pointer">
+                                <option value="" disabled selected>Switch Camera</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Camera Viewfinder -->
+                    <div class="bg-slate-900 rounded-xl overflow-hidden shadow-inner relative w-full aspect-[4/3] lg:aspect-video flex items-center justify-center border border-slate-300">
+                        <video id="video" class="w-full h-full object-cover mirrored opacity-95" autoplay playsinline muted></video>
+                        <canvas id="canvas" class="hidden"></canvas>
+                        
+                        <!-- Smart Guide -->
+                        <div class="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
+                            <div class="w-40 h-56 md:w-56 md:h-64 border border-white/40 rounded-2xl relative">
+                                <div class="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-white/80 rounded-tl-lg"></div>
+                                <div class="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-white/80 rounded-tr-lg"></div>
+                                <div class="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-white/80 rounded-bl-lg"></div>
+                                <div class="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-white/80 rounded-br-lg"></div>
+                            </div>
+                            <span id="cam-guide-text" class="mt-4 text-white/80 text-xs font-bold uppercase tracking-widest bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">Align Face Here</span>
+                        </div>
 
-            <!-- Verify Result Card -->
-            <div id="ver-result" class="mt-6 hidden transition-all">
-                <div class="bg-slate-900 rounded-lg p-6 border border-slate-700 flex flex-col items-center gap-3 text-center">
-                    <div id="ver-icon" class="w-20 h-20 rounded-full flex items-center justify-center text-4xl font-bold shadow-inner mb-2"></div>
-                    <div>
-                        <h3 id="ver-name" class="text-2xl font-bold"></h3>
-                        <p id="ver-sim" class="text-slate-400 font-mono mt-1 text-sm"></p>
+                        <!-- Error Overlay -->
+                        <div id="camera-error" class="hidden absolute inset-0 bg-slate-50 flex flex-col items-center justify-center p-6 text-center z-30">
+                            <i class="fas fa-video-slash text-4xl text-slate-400 mb-4"></i>
+                            <h3 class="text-slate-800 font-semibold text-lg mb-2">Camera Unavailable</h3>
+                            <p class="text-slate-500 text-sm mb-6">System requires camera access to verify identity.</p>
+                            <button onclick="startCamera()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg font-medium text-sm transition-colors shadow-sm">
+                                Retry Connection
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
+            <!-- DYNAMIC VIEWS SECTION (Right on Desktop, Bottom on Mobile) -->
+            <div class="w-full lg:w-1/2 flex flex-col h-full">
+                
+                <!-- Desktop Navigation Tabs (Hidden on Mobile) -->
+                <div class="hidden lg:flex gap-2 mb-6 bg-slate-200/50 p-1.5 rounded-xl border border-slate-200">
+                    <button onclick="switchTab('scan')" id="tab-dt-scan" class="flex-1 py-2.5 rounded-lg text-sm font-bold transition-all bg-white text-indigo-700 shadow-sm">Scan Identity</button>
+                    <button onclick="switchTab('register')" id="tab-dt-register" class="flex-1 py-2.5 rounded-lg text-sm font-bold text-slate-500 hover:text-slate-700 transition-all">Add New User</button>
+                    <button onclick="switchTab('logs')" id="tab-dt-logs" class="flex-1 py-2.5 rounded-lg text-sm font-bold text-slate-500 hover:text-slate-700 transition-all">Session Logs</button>
+                </div>
+
+                <!-- View 1: SCAN (Clock In / Out) -->
+                <div id="view-scan" class="app-view bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col flex-1 justify-center">
+                    <div class="text-center mb-8">
+                        <h2 class="text-2xl font-black text-slate-800 mb-2">Record Attendance</h2>
+                        <p class="text-slate-500 text-sm">Look at the camera and select your action below.</p>
+                    </div>
+
+                    <div class="flex gap-3 sm:gap-4 w-full">
+                        <button onclick="handleVerify('Clock In')" id="btn-clock-in" class="touch-target flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 sm:py-6 rounded-xl sm:rounded-2xl shadow-[0_4px_14px_0_rgba(5,150,105,0.39)] flex flex-col items-center justify-center gap-1 sm:gap-2 border border-emerald-500">
+                            <i class="fas fa-sign-in-alt text-2xl sm:text-3xl"></i>
+                            <span class="text-sm sm:text-lg font-bold tracking-wide whitespace-nowrap">CLOCK IN</span>
+                        </button>
+                        
+                        <button onclick="handleVerify('Clock Out')" id="btn-clock-out" class="touch-target flex-1 bg-amber-500 hover:bg-amber-600 text-white py-4 sm:py-6 rounded-xl sm:rounded-2xl shadow-[0_4px_14px_0_rgba(245,158,11,0.39)] flex flex-col items-center justify-center gap-1 sm:gap-2 border border-amber-400">
+                            <i class="fas fa-sign-out-alt text-2xl sm:text-3xl"></i>
+                            <span class="text-sm sm:text-lg font-bold tracking-wide whitespace-nowrap">CLOCK OUT</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- View 2: ADD USER -->
+                <div id="view-register" class="app-view hidden bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col flex-1 justify-center">
+                    <div class="text-center mb-8">
+                        <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-indigo-100">
+                            <i class="fas fa-user-plus text-2xl"></i>
+                        </div>
+                        <h2 class="text-2xl font-black text-slate-800 mb-2">Enroll New User</h2>
+                        <p class="text-slate-500 text-sm">Add a new face to the secure database.</p>
+                    </div>
+
+                    <form onsubmit="handleRegister(event)" class="space-y-6 w-full max-w-sm mx-auto">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Full Legal Name</label>
+                            <input type="text" id="reg-name" required placeholder="e.g. John Doe" class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-4 focus:border-indigo-500 focus:bg-white outline-none transition-all text-lg font-semibold text-slate-800 placeholder-slate-400">
+                        </div>
+                        
+                        <button type="submit" id="btn-register" class="touch-target w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-indigo-200 flex justify-center items-center gap-3">
+                            <i class="fas fa-camera-retro text-xl"></i> Capture & Save Profile
+                        </button>
+                    </form>
+                    
+                    <div id="reg-result" class="mt-6 hidden p-4 rounded-xl text-center text-sm font-bold border transition-all max-w-sm mx-auto w-full"></div>
+                </div>
+
+                <!-- View 3: LOGS -->
+                <div id="view-logs" class="app-view hidden bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col flex-1 max-h-[60vh] lg:max-h-full">
+                    <div class="flex justify-between items-end mb-4 pb-4 border-b border-slate-100 shrink-0">
+                        <div>
+                            <h2 class="text-xl font-black text-slate-800">Recent Activity</h2>
+                            <p class="text-xs text-slate-500 mt-1">Today's session logs</p>
+                        </div>
+                        <span class="bg-slate-100 text-slate-600 border border-slate-200 text-xs font-bold px-3 py-1.5 rounded-lg" id="log-count">0 Records</span>
+                    </div>
+                    
+                    <div id="attendance-logs" class="flex-1 overflow-y-auto custom-scrollbar space-y-3 pb-4 pr-2">
+                        <div class="text-center text-slate-400 font-medium mt-16 flex flex-col items-center" id="empty-logs-msg">
+                            <div class="bg-slate-50 p-4 rounded-full mb-3 border border-slate-100">
+                                <i class="fas fa-clipboard-list text-3xl text-slate-300"></i>
+                            </div>
+                            <span class="text-sm">Waiting for first scan...</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- MOBILE BOTTOM NAVIGATION BAR -->
+    <nav class="lg:hidden fixed bottom-0 w-full bg-white border-t border-slate-200 flex justify-around items-center pb-safe z-40 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+        
+        <button onclick="switchTab('scan')" id="tab-mob-scan" class="flex flex-col items-center py-3 px-6 text-indigo-600 transition-colors">
+            <i class="fas fa-fingerprint text-xl mb-1"></i>
+            <span class="text-[10px] font-bold uppercase tracking-wider">Scan</span>
+        </button>
+        
+        <button onclick="switchTab('register')" id="tab-mob-register" class="flex flex-col items-center py-3 px-6 text-slate-400 hover:text-slate-800 transition-colors">
+            <i class="fas fa-user-plus text-xl mb-1"></i>
+            <span class="text-[10px] font-bold uppercase tracking-wider">Add User</span>
+        </button>
+        
+        <button onclick="switchTab('logs')" id="tab-mob-logs" class="flex flex-col items-center py-3 px-6 text-slate-400 hover:text-slate-800 transition-colors">
+            <i class="fas fa-list-ul text-xl mb-1"></i>
+            <span class="text-[10px] font-bold uppercase tracking-wider">Activity</span>
+        </button>
+        
+    </nav>
+
+    <!-- PROFESSIONAL MODALS -->
+    <!-- Success Modal -->
+    <div id="modal-success" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-3xl shadow-2xl border border-slate-100 p-8 max-w-xs w-full text-center transform scale-100 animate-[bounceIn_0.3s_ease-out]">
+            <div class="mx-auto w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-500 text-4xl mb-6 shadow-inner">
+                <i class="fas fa-check"></i>
+            </div>
+            <h2 class="text-2xl font-black text-slate-900 mb-1">Verified!</h2>
+            <p id="success-name" class="text-lg font-bold text-slate-500 mb-6">Employee Name</p>
+            
+            <div class="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
+                <p id="success-action" class="text-sm font-bold text-emerald-700 uppercase tracking-widest">Clocked In</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Modal -->
+    <div id="modal-error" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-3xl shadow-2xl border border-slate-100 p-8 max-w-xs w-full text-center transform scale-100 animate-[shake_0.4s_ease-in-out]">
+            <div class="mx-auto w-20 h-20 bg-rose-100 rounded-full flex items-center justify-center text-rose-500 text-4xl mb-6 shadow-inner">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <h2 class="text-2xl font-black text-slate-900 mb-2">Failed</h2>
+            <p id="error-msg" class="text-sm font-medium text-slate-500 mb-8">Face not recognized in database.</p>
+            <button onclick="closeModals()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 py-3 rounded-xl font-bold transition-colors">
+                Try Again
+            </button>
+        </div>
     </div>
 
     <script>
+        // CONFIGURATION
+        const API_BASE_URL = 'https://zckgln84-8000.inc1.devtunnels.ms';
+        let logCounter = 0;
+        let isProcessing = false;
+
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         let stream = null;
 
-        // Check API Status
-        fetch('/health')
-            .then(res => res.json())
-            .then(data => document.getElementById('api-status').innerHTML = `<span class="text-green-400 flex items-center gap-1"><span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span> Online</span>`)
-            .catch(() => document.getElementById('api-status').innerHTML = `<span class="text-red-400 flex items-center gap-1"><span class="w-2 h-2 bg-red-400 rounded-full"></span> Offline</span>`);
+        // --- CLOCK LOGIC ---
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').innerText = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+            document.getElementById('date').innerText = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
 
-        // Initialize Camera
-        async function startCamera() {
+        // --- API STATUS ---
+        fetch(`${API_BASE_URL}/health`)
+            .then(res => res.json())
+            .then(() => document.getElementById('api-status').innerHTML = `<span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> Online`)
+            .catch(() => document.getElementById('api-status').innerHTML = `<span class="w-1.5 h-1.5 bg-rose-500 rounded-full"></span> Offline`);
+
+        // --- CAMERA LOGIC ---
+        async function startCamera(deviceId = null) {
+            document.getElementById('camera-error').classList.add('hidden');
+            if (stream) stream.getTracks().forEach(track => track.stop());
+
             try {
-                // Request a resolution that works well on mobile portrait (tall) or desktop (wide)
-                const constraints = { 
-                    video: { 
-                        facingMode: "user",
-                        width: { ideal: 1280 }, 
-                        height: { ideal: 720 }
-                    } 
-                };
+                if (!navigator.mediaDevices) throw new Error("Browser not supported");
+                let constraints = { audio: false, video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" } };
+                if (deviceId) constraints.video = { deviceId: { exact: deviceId } };
 
                 stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
-                document.getElementById('btn-start-cam').classList.add('hidden');
+                await listCameras();
             } catch (err) {
-                console.error("Camera Error:", err);
-                alert("Could not access camera. Please ensure you are using HTTPS and have granted camera permissions.");
+                document.getElementById('camera-error').classList.remove('hidden');
             }
         }
         
-        // Start camera on load
-        startCamera();
-
-        function switchTab(tab) {
-            document.querySelectorAll('[id^="section-"]').forEach(el => el.classList.add('hidden'));
-            document.getElementById(`section-${tab}`).classList.remove('hidden');
-            
-            document.getElementById('tab-register').classList.toggle('bg-blue-600', tab === 'register');
-            document.getElementById('tab-register').classList.toggle('text-slate-300', tab !== 'register');
-            
-            document.getElementById('tab-verify').classList.toggle('bg-green-600', tab === 'verify');
-            document.getElementById('tab-verify').classList.toggle('text-slate-300', tab !== 'verify');
-            
-            // Clear results
-            document.getElementById('reg-result').classList.add('hidden');
-            document.getElementById('ver-result').classList.add('hidden');
+        async function listCameras() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                const select = document.getElementById('camera-select');
+                select.innerHTML = '<option value="" disabled selected>Switch Camera</option>';
+                videoDevices.forEach((d, i) => {
+                    select.add(new Option(d.label || `Camera ${i + 1}`, d.deviceId));
+                });
+            } catch (e) {}
         }
 
+        function restartCameraWithId(deviceId) { startCamera(deviceId); }
+        startCamera(); // Auto start
+
+        // --- TAB & NAVIGATION LOGIC ---
+        function switchTab(tabId) {
+            // 1. Hide all views
+            document.querySelectorAll('.app-view').forEach(el => el.classList.add('hidden'));
+            
+            // 2. Show target view
+            document.getElementById(`view-${tabId}`).classList.remove('hidden');
+
+            // 3. Handle Camera Container Visibility (Hide on Logs for Mobile)
+            const camSection = document.getElementById('shared-camera-section');
+            if(tabId === 'logs') {
+                camSection.classList.add('mobile-hidden');
+            } else {
+                camSection.classList.remove('mobile-hidden');
+                document.getElementById('cam-guide-text').innerText = tabId === 'scan' ? 'Align Face to Verify' : 'Align Face to Enroll';
+            }
+
+            // 4. Update Desktop Tabs Styling
+            const dtTabs = ['scan', 'register', 'logs'];
+            dtTabs.forEach(t => {
+                const btn = document.getElementById(`tab-dt-${t}`);
+                if (!btn) return;
+                if(t === tabId) {
+                    btn.className = "flex-1 py-2.5 rounded-lg text-sm font-bold transition-all bg-white text-indigo-700 shadow-sm";
+                } else {
+                    btn.className = "flex-1 py-2.5 rounded-lg text-sm font-bold text-slate-500 hover:text-slate-700 transition-all";
+                }
+            });
+
+            // 5. Update Mobile Tabs Styling
+            dtTabs.forEach(t => {
+                const btn = document.getElementById(`tab-mob-${t}`);
+                if (!btn) return;
+                if(t === tabId) {
+                    btn.className = "flex flex-col items-center py-3 px-6 text-indigo-600 transition-colors";
+                } else {
+                    btn.className = "flex flex-col items-center py-3 px-6 text-slate-400 hover:text-slate-800 transition-colors";
+                }
+            });
+
+            // Reset forms
+            document.getElementById('reg-result').classList.add('hidden');
+            document.getElementById('reg-name').value = '';
+        }
+
+        // --- MODAL CONTROLS ---
+        function showSuccessModal(name, action) {
+            document.getElementById('success-name').innerText = name;
+            document.getElementById('success-action').innerText = action;
+            document.getElementById('modal-success').classList.remove('hidden');
+            setTimeout(() => { closeModals(); }, 2500);
+        }
+
+        function showErrorModal(message) {
+            document.getElementById('error-msg').innerText = message;
+            document.getElementById('modal-error').classList.remove('hidden');
+            setTimeout(() => { closeModals(); }, 3500);
+        }
+
+        function closeModals() {
+            document.getElementById('modal-success').classList.add('hidden');
+            document.getElementById('modal-error').classList.add('hidden');
+        }
+
+        // --- CORE FUNCTIONS ---
         function captureImage() {
             if (!stream) {
-                alert("Camera not active");
+                showErrorModal("Camera hardware not detected.");
                 return null;
             }
-            const context = canvas.getContext('2d');
+            const ctx = canvas.getContext('2d');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            return new Promise(resolve => {
-                canvas.toBlob(resolve, 'image/jpeg', 0.85);
-            });
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            return new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
         }
 
-        async function handleRegister(e) {
-            e.preventDefault();
-            const btn = document.getElementById('btn-register');
-            const originalHTML = btn.innerHTML;
+        // Verification (Scan Tab)
+        async function handleVerify(actionType) {
+            if (isProcessing) return; 
             
-            try {
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-                btn.disabled = true;
-
-                const blob = await captureImage();
-                if (!blob) throw new Error("Failed to capture image");
-
-                const formData = new FormData();
-                formData.append('name', document.getElementById('reg-name').value);
-                formData.append('file', blob, 'capture.jpg');
-
-                const res = await fetch('/register', { method: 'POST', body: formData });
-                const data = await res.json();
-                
-                const resultDiv = document.getElementById('reg-result');
-                resultDiv.classList.remove('hidden');
-                
-                if (res.ok) {
-                    resultDiv.className = "mt-4 p-4 rounded-lg text-center bg-green-900/50 text-green-200 border border-green-700 shadow";
-                    resultDiv.innerHTML = `<i class="fas fa-check-circle text-xl mb-1"></i><br>${data.message}`;
-                    document.getElementById('reg-name').value = '';
-                } else {
-                    throw new Error(data.detail || "Registration failed");
-                }
-            } catch (err) {
-                const resultDiv = document.getElementById('reg-result');
-                resultDiv.classList.remove('hidden');
-                resultDiv.className = "mt-4 p-4 rounded-lg text-center bg-red-900/50 text-red-200 border border-red-700 shadow";
-                resultDiv.innerHTML = `<i class="fas fa-exclamation-triangle text-xl mb-1"></i><br>${err.message}`;
-            } finally {
-                btn.innerHTML = originalHTML;
-                btn.disabled = false;
-            }
-        }
-
-        async function handleVerify() {
-            const btn = document.getElementById('btn-verify');
-            const originalHTML = btn.innerHTML;
+            isProcessing = true;
+            const btnIn = document.getElementById('btn-clock-in');
+            const btnOut = document.getElementById('btn-clock-out');
             
-            try {
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
-                btn.disabled = true;
+            const originalIn = btnIn.innerHTML;
+            const originalOut = btnOut.innerHTML;
+            
+            const processingHtml = `<i class="fas fa-circle-notch fa-spin text-2xl sm:text-3xl"></i><span class="text-sm sm:text-lg font-bold tracking-wide">SCANNING</span>`;
+            
+            if(actionType === 'Clock In') btnIn.innerHTML = processingHtml;
+            else btnOut.innerHTML = processingHtml;
 
+            try {
                 const blob = await captureImage();
-                if (!blob) throw new Error("Failed to capture image");
+                if (!blob) throw new Error("Image capture failed");
 
                 const formData = new FormData();
                 formData.append('file', blob, 'verify.jpg');
 
-                const res = await fetch('/verify', { method: 'POST', body: formData });
+                const res = await fetch(`${API_BASE_URL}/verify`, { method: 'POST', body: formData });
                 const data = await res.json();
-                
-                const resultDiv = document.getElementById('ver-result');
-                const iconDiv = document.getElementById('ver-icon');
-                const nameEl = document.getElementById('ver-name');
-                const simEl = document.getElementById('ver-sim');
-                
-                resultDiv.classList.remove('hidden');
 
                 if (res.ok && data.match) {
-                    iconDiv.className = "w-20 h-20 rounded-full flex items-center justify-center text-4xl font-bold bg-green-500 text-white shadow-lg mb-2";
-                    iconDiv.innerHTML = '<i class="fas fa-check"></i>';
-                    nameEl.innerText = `${data.person}`;
-                    nameEl.className = "text-2xl font-bold text-green-400";
-                    simEl.innerText = `Confidence: ${(data.similarity * 100).toFixed(1)}%`;
-                    resultDiv.querySelector('div').className = "bg-green-900/20 rounded-lg p-6 border border-green-600 flex flex-col items-center gap-2";
+                    showSuccessModal(data.person, actionType);
+                    addLogEntry(data.person, actionType, true);
                 } else {
-                    iconDiv.className = "w-20 h-20 rounded-full flex items-center justify-center text-4xl font-bold bg-red-500 text-white shadow-lg mb-2";
-                    iconDiv.innerHTML = '<i class="fas fa-times"></i>';
-                    nameEl.innerText = "Unknown Person";
-                    nameEl.className = "text-2xl font-bold text-red-400";
-                    simEl.innerText = data.match === false ? `Best Match: ${(data.similarity * 100).toFixed(1)}% (Too Low)` : (data.detail || "Error");
-                    resultDiv.querySelector('div').className = "bg-red-900/20 rounded-lg p-6 border border-red-600 flex flex-col items-center gap-2";
+                    let errorMsg = "Facial signature not recognized.";
+                    if (data.detail) errorMsg = data.detail;
+                    if (data.match === false && data.similarity === 0) errorMsg = "Database is currently empty.";
+                    
+                    showErrorModal(errorMsg);
+                    addLogEntry("Unknown Entry", actionType, false);
                 }
             } catch (err) {
-                alert("Error: " + err.message);
+                showErrorModal("Connection to verification server lost.");
+            } finally {
+                btnIn.innerHTML = originalIn;
+                btnOut.innerHTML = originalOut;
+                isProcessing = false;
+            }
+        }
+
+        function addLogEntry(name, type, success) {
+            const container = document.getElementById('attendance-logs');
+            const emptyMsg = document.getElementById('empty-logs-msg');
+            if(emptyMsg) emptyMsg.style.display = 'none';
+
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            let badgeStyle = success 
+                ? (type === 'Clock In' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-amber-700 bg-amber-50 border-amber-200') 
+                : 'text-rose-700 bg-rose-50 border-rose-200';
+            let iconClass = success ? 'fa-check text-emerald-500' : 'fa-times text-rose-500';
+
+            const el = document.createElement('div');
+            el.className = "flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100 shadow-sm animate-[fadeIn_0.3s_ease-out]";
+            el.innerHTML = `
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center border border-slate-200 shadow-sm">
+                        <i class="fas ${iconClass} text-lg"></i>
+                    </div>
+                    <div>
+                        <div class="text-sm font-black text-slate-800">${name}</div>
+                        <div class="text-[11px] font-bold text-slate-400 mt-0.5">${time}</div>
+                    </div>
+                </div>
+                <div class="text-[10px] font-black uppercase tracking-widest border px-3 py-1.5 rounded-lg ${badgeStyle}">
+                    ${type}
+                </div>
+            `;
+            container.prepend(el);
+            
+            logCounter++;
+            document.getElementById('log-count').innerText = `${logCounter} Records`;
+        }
+
+        // Registration (Add User Tab)
+        async function handleRegister(e, forceUpdate = false) {
+            if (e) e.preventDefault();
+            
+            const btn = document.getElementById('btn-register');
+            const originalHTML = btn.innerHTML;
+            const resultDiv = document.getElementById('reg-result');
+            
+            try {
+                btn.innerHTML = '<i class="fas fa-circle-notch fa-spin text-xl"></i> Capturing...';
+                btn.disabled = true;
+
+                const blob = await captureImage();
+                if (!blob) throw new Error("Image capture failed");
+
+                const formData = new FormData();
+                const name = document.getElementById('reg-name').value.trim();
+                formData.append('name', name);
+                formData.append('file', blob, 'capture.jpg');
+                if (forceUpdate) formData.append('force_update', 'true');
+
+                const res = await fetch(`${API_BASE_URL}/register`, { method: 'POST', body: formData });
+                const data = await res.json();
+                
+                resultDiv.classList.remove('hidden');
+                
+                if (res.ok) {
+                    resultDiv.className = "mt-6 p-4 rounded-xl text-center text-sm font-bold border bg-emerald-50 text-emerald-800 border-emerald-200 max-w-sm mx-auto w-full";
+                    resultDiv.innerHTML = `<i class="fas fa-check-circle mr-2 text-emerald-600"></i> ${name} Registered successfully!`;
+                    if (!forceUpdate) document.getElementById('reg-name').value = '';
+                } else if (res.status === 409) {
+                    if(confirm(`"${name}" is already registered.\nDo you want to update their face data?`)) {
+                        await handleRegister(null, true);
+                    } else {
+                        resultDiv.classList.add('hidden');
+                    }
+                } else {
+                    throw new Error(data.detail || "Enrollment failed");
+                }
+            } catch (err) {
+                resultDiv.classList.remove('hidden');
+                resultDiv.className = "mt-6 p-4 rounded-xl text-center text-sm font-bold border bg-rose-50 text-rose-800 border-rose-200 max-w-sm mx-auto w-full";
+                resultDiv.innerHTML = `<i class="fas fa-exclamation-triangle mr-2 text-rose-600"></i> ${err.message}`;
             } finally {
                 btn.innerHTML = originalHTML;
                 btn.disabled = false;
             }
         }
     </script>
+    <style>
+        /* CSS Animations for popups and lists */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes bounceIn {
+            0% { opacity: 0; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1.05); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            75% { transform: translateX(8px); }
+        }
+        
+        /* Support for iOS safe area to prevent nav bar getting cut off */
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
+    </style>
 </body>
 </html>

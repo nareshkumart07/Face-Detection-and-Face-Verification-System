@@ -3,7 +3,13 @@ uvicorn
 python-multipart
 sqlalchemy
 psycopg2-binary
-numpy
+numpy<2.0
 opencv-python-headless
+pillow>=10.2.0
 insightface
+facenet-pytorch
+torch
+torchvision
 onnxruntime
+scikit-learn
+requests
